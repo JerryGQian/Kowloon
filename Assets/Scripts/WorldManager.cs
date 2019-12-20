@@ -7,31 +7,149 @@ public enum BorderState { Undefined, Closed, Opened };
 
 public class WorldManager : MonoBehaviour {
 
-    
-
     public GameObject player;
     private Transform playerTransform;
-    public GameObject tile;
+    public GameObject[] tilePref;
 
     private int curr = 0;
     //private GameObject[][] tiles = new GameObject[1000][1000]();
     
     public TileData[,] tiles;
+    public bool[,] instantiated;
+    private int gridDim = 20;
 
     // Start is called before the first frame update
     void Start() {
         playerTransform = player.GetComponent<Transform>();
 
-        //tiles = new TileData[20][20];
-        tiles = GeneratePaths(20);
+        tiles = GeneratePaths(gridDim);
+        instantiated = new bool[gridDim, gridDim];
+        for (int i = 0; i < gridDim; i++) {
+            for (int j = 0; j < gridDim; j++) {
+                instantiated[i, j] = false;
+            }
+        }
     }
 
     // Update is called once per frame
     void Update() {
-        if (playerTransform.position.x > 10*curr) {
+        /*if (playerTransform.position.x > 10*curr) {
             Instantiate(tile, new Vector3(curr * 10 + 5, 0, 0), Quaternion.identity);
             curr++;
+        }*/
+
+        int currX = ((int)playerTransform.position.x/10) + gridDim/2;
+        int currZ = ((int)playerTransform.position.z/10) + gridDim/2;
+
+        InstantiateTile(currX, currZ);
+        InstantiateTile(currX+1, currZ);
+        InstantiateTile(currX+1, currZ + 1);
+        InstantiateTile(currX, currZ + 1);
+        InstantiateTile(currX-1, currZ + 1);
+        InstantiateTile(currX-1, currZ);
+        InstantiateTile(currX-1, currZ - 1);
+        InstantiateTile(currX, currZ - 1);
+        InstantiateTile(currX+1, currZ - 1);
+        /*Instantiate(
+            tilePref[DetermineTileType(TileData[currX, currY].path)], 
+            new Vector3(currX * 10 + 5, currY * 10 + 5, 0), 
+            Quaternion.identity);*/
+    }
+
+    private void InstantiateTile(int x, int y) {
+        if (!instantiated[x,y]) {
+            int prefIdx = DetermineTileType(tiles[x, y].path);
+            Debug.Log(x + " " + y + " " + prefIdx);
+            Instantiate(
+                /*tilePref[0]*/tilePref[prefIdx],
+                new Vector3((x-gridDim/2) * 10, 0, (y - gridDim / 2) * 10),
+                Quaternion.identity);
+            instantiated[x, y] = true;
         }
+    }
+
+    private int DetermineTileType(BorderState[] border) {
+
+        int type = 0;
+        if (border[0] == BorderState.Opened) {
+            if (border[1] == BorderState.Opened) {
+                if (border[2] == BorderState.Opened) {
+                    if (border[3] == BorderState.Opened) {
+                        type = 10;
+                    }
+                    else {
+                        type = 6;
+                    }
+                }
+                else {
+                    if (border[3] == BorderState.Opened) {
+                        type = 7;
+                    }
+                    else {
+                        type = 2;
+                    }
+                }
+            }
+            else {
+                if (border[2] == BorderState.Opened) {
+                    if (border[3] == BorderState.Opened) {
+                        type = 8;
+                    }
+                    else {
+                        type = 1;
+                    }
+                }
+                else {
+                    if (border[3] == BorderState.Opened) {
+                        type = 3;
+                    }
+                    else {
+                        type = -1;
+                    }
+                }
+            }
+        }
+        else { //0
+            if (border[1] == BorderState.Opened) {
+                if (border[2] == BorderState.Opened) {
+                    if (border[3] == BorderState.Opened) {
+                        type = 9;
+                    }
+                    else { //3
+                        type = 5;
+                    }
+                }
+                else { //2
+                    if (border[3] == BorderState.Opened) {
+                        type = 0;
+                    }
+                    else {
+                        type = -1;
+                    }
+                }
+            }
+            else { // 1
+                if (border[2] == BorderState.Opened) {
+                    if (border[3] == BorderState.Opened) {
+                        type = 4;
+                    }
+                    else { //3
+                        type = -1;
+                    }
+                }
+                else { //2
+                    if (border[3] == BorderState.Opened) {
+                        type = -1;
+                    }
+                    else {
+                        type = -1;
+                    }
+                }
+            }
+        }
+
+        if (type == -1) type = 10;
+        return type;
     }
 
     private TileData[,] GeneratePaths(int dim) {
@@ -53,16 +171,17 @@ public class WorldManager : MonoBehaviour {
             int y = curr.Item2;
 
             Debug.Log("Coord: " + x + " " + y);
+            if (toExplore.Count > 0) Debug.Log("queue: " + toExplore.Peek());
 
-            BorderState[] bs = DetermineTile(
+            BorderState[] bs = DetermineTileBorders(
                 rand.Next(0, 100),
-                myTiles[x, y-1].path[0],
-                myTiles[x+1, y].path[0],
-                myTiles[x, y+1].path[0],
-                myTiles[x-1, y].path[0]);
+                new BorderState[] {y > 0 ? myTiles[x, y-1].path[0] : BorderState.Closed,
+                x < dim-1 ? myTiles[x+1, y].path[1] : BorderState.Closed,
+                y < dim-1 ? myTiles[x, y+1].path[2] : BorderState.Closed,
+                x > 0 ? myTiles[x-1, y].path[3] : BorderState.Closed }
+                );
 
-
-            myTiles[x, y].SetPath(bs[0],bs[1],bs[2],bs[3]);
+            myTiles[x, y].SetPath(bs);
             myTiles[x, y].established = true;
 
             //add to queue
@@ -79,25 +198,51 @@ public class WorldManager : MonoBehaviour {
                 toExplore.Enqueue(new Tuple<int, int>(x, y-1));
             }
 
-            
-
-
         }
 
-        for (int i = 0; i < 10; i++) {
+        /*for (int i = 0; i < 10; i++) {
             Debug.Log("rand #" + i + " " + rand.Next(0, 100));
-        }
+        }*/
 
-        return tiles;
+        return myTiles;
     }
 
-    private BorderState[] DetermineTile(int num, 
-        BorderState n = BorderState.Undefined, 
-        BorderState w = BorderState.Undefined,
-        BorderState s = BorderState.Undefined,
-        BorderState e = BorderState.Undefined) {
+    private BorderState[] DetermineTileBorders(int num, 
+        BorderState[] border) {
 
-        BorderState[] res = new BorderState[4];
+        //BorderState[] res = new BorderState[4];
+
+        int undefCount = 0;
+        for (int i = 0; i < 3; i++) {
+            if (border[i] == BorderState.Undefined) undefCount++;
+        }
+
+        int[] order = new int[4] { 3,0,1,2 };
+        for (int i = 0; i < 3; i++) {
+            int curr = order[i];
+            if (border[curr] == BorderState.Undefined) {
+                switch (undefCount) {
+                    case 1:
+                        if (num < 10)
+                            border[curr] = BorderState.Opened;
+                        else
+                            border[curr] = BorderState.Closed;
+                        break;
+                    case 2:
+                        if (num < 20)
+                            border[curr] = BorderState.Opened;
+                        else
+                            border[curr] = BorderState.Closed;
+                        break;
+                    case 3:
+                        if (num < 35)
+                            border[curr] = BorderState.Opened;
+                        else
+                            border[curr] = BorderState.Closed;
+                        break;
+                }
+            }
+        }
 
         //50% straight
         //20% building
@@ -105,24 +250,7 @@ public class WorldManager : MonoBehaviour {
         //10% T junc
         //10% corner
 
-        if (num < 20) { //20% building
-
-        }
-        else if (num < 70) { //50% straight
-
-        }
-        else if (num < 80) { //10% cross
-
-        }
-        else if (num < 90) { //10% T junc
-
-        }
-        else { //10% corner
-
-        }
-
-
-        return res;
+        return border;
     }
 }
 
@@ -147,5 +275,10 @@ public class TileData {
         BorderState e = BorderState.Undefined) {
 
         path = new BorderState[4] { n, w, s, e };
+    }
+
+    public void SetPath(BorderState[] border) {
+
+        path = border;
     }
 }
