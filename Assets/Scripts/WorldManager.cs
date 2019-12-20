@@ -16,7 +16,8 @@ public class WorldManager : MonoBehaviour {
     
     public TileData[,] tiles;
     public bool[,] instantiated;
-    private int gridDim = 20;
+    private int gridDim = 40;
+    private ArrayList tileList;
 
     // Start is called before the first frame update
     void Start() {
@@ -29,6 +30,8 @@ public class WorldManager : MonoBehaviour {
                 instantiated[i, j] = false;
             }
         }
+
+        tileList = new ArrayList();
     }
 
     // Update is called once per frame
@@ -41,31 +44,56 @@ public class WorldManager : MonoBehaviour {
         int currX = ((int)playerTransform.position.x/10) + gridDim/2;
         int currZ = ((int)playerTransform.position.z/10) + gridDim/2;
 
-        InstantiateTile(currX, currZ);
-        InstantiateTile(currX+1, currZ);
-        InstantiateTile(currX+1, currZ + 1);
-        InstantiateTile(currX, currZ + 1);
-        InstantiateTile(currX-1, currZ + 1);
-        InstantiateTile(currX-1, currZ);
-        InstantiateTile(currX-1, currZ - 1);
-        InstantiateTile(currX, currZ - 1);
-        InstantiateTile(currX+1, currZ - 1);
+        foreach (Tuple<GameObject,int,int> tup in tileList) {
+            GameObject currTile = tup.Item1;
+            Vector3 diff = playerTransform.position - currTile.GetComponent<Transform>().position;
+            
+            if (diff.magnitude > 25f) {
+                instantiated[tup.Item2, tup.Item3] = false;
+                tileList.Remove(tup);
+                Destroy(currTile);
+            }
+        }
+
+        GameObject newTile = InstantiateTile(currX, currZ, tileList);
+        //if (newTile != null) tileList.Add(new Tuple<GameObject,int,int>(newTile, currX+1, currZ));
+        newTile = InstantiateTile(currX+1, currZ, tileList);
+        //if (newTile != null) tileList.Add(newTile);
+        newTile = InstantiateTile(currX+1, currZ + 1, tileList);
+        //if (newTile != null) tileList.Add(newTile);
+        newTile = InstantiateTile(currX, currZ + 1, tileList);
+        //if (newTile != null) tileList.Add(newTile);
+        newTile = InstantiateTile(currX-1, currZ + 1, tileList);
+        //if (newTile != null) tileList.Add(newTile);
+        newTile = InstantiateTile(currX-1, currZ, tileList);
+        //if (newTile != null) tileList.Add(newTile);
+        newTile = InstantiateTile(currX-1, currZ - 1, tileList);
+        //if (newTile != null) tileList.Add(newTile);
+        newTile = InstantiateTile(currX, currZ - 1, tileList);
+        //if (newTile != null) tileList.Add(newTile);
+        newTile = InstantiateTile(currX+1, currZ - 1, tileList);
+        //if (newTile != null) tileList.Add(newTile);
         /*Instantiate(
             tilePref[DetermineTileType(TileData[currX, currY].path)], 
             new Vector3(currX * 10 + 5, currY * 10 + 5, 0), 
             Quaternion.identity);*/
     }
 
-    private void InstantiateTile(int x, int y) {
+    private GameObject InstantiateTile(int x, int y, ArrayList list) {
+        GameObject newTile = null;
         if (!instantiated[x,y]) {
             int prefIdx = DetermineTileType(tiles[x, y].path);
             Debug.Log(x + " " + y + " " + prefIdx);
-            Instantiate(
+            newTile = Instantiate(
                 /*tilePref[0]*/tilePref[prefIdx],
                 new Vector3((x-gridDim/2) * 10, 0, (y - gridDim / 2) * 10),
                 Quaternion.identity);
             instantiated[x, y] = true;
+
+            list.Add(new Tuple<GameObject, int, int>(newTile, x, y));
         }
+
+        return newTile;
     }
 
     private int DetermineTileType(BorderState[] border) {
