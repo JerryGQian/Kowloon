@@ -11,18 +11,24 @@ public class WorldManager : MonoBehaviour {
     private Transform playerTransform;
     public GameObject[] tilePref;
     public GameObject cube;
+    public GameObject[] buildingPref;
+    public GameObject[] aveBuildingPref;
+    public GameObject[] aveGroundPref;
 
+    public int seed = 100;
     public int zoneDim = 4;
+    public int tileDim = 10;
+    private int gridDim = 1000;
     private CoordRandom zoneRand;
     private CoordRandom tileRand;
-    public int seed = 100;
+    
 
     private int curr = 0;
     //private GameObject[][] tiles = new GameObject[1000][1000]();
 
     public TileData[,] tiles;
     public bool[,] instantiated;
-    private int gridDim = 40;
+    
     private ArrayList tileList;
 
     private int width = 50;
@@ -97,32 +103,56 @@ public class WorldManager : MonoBehaviour {
         GameObject newTile = null;
         TileData tdata = GetTileData(x,y);
 
-        if (!instantiated[x, y]) {
-            /*int prefIdx = DetermineTileType(tiles[x, y].path);
-            Debug.Log("prefab idx " + prefIdx);*/
-            
-
+        if (!instantiated[x, y]) {         
             if (tdata.hasAve) {
+                instantiated[x, y] = true;
                 float midRatio = (tdata.aveLRatio + tdata.aveRRatio)/ 2;
-                GameObject cb1 = Instantiate(
-                    cube,
-                    new Vector3((x - gridDim / 2) * 10, -25, (y - gridDim / 2 + midRatio) * 10 + 2.5f),
-                    Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
 
-                GameObject cb2 = Instantiate(
-                    cube,
-                    new Vector3((x - gridDim / 2) * 10, -25, (y - gridDim / 2 + midRatio) * 10 - 2.5f),
-                    Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
-                GameObject cb3 = Instantiate(
+                GameObject crevasseFloor = Instantiate(
                     cube,
                     new Vector3((x - gridDim / 2) * 10, -50, (y - gridDim / 2 + midRatio) * 10),
                     Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
 
-                cb1.transform.localScale = new Vector3(1, 50, 10);
-                cb2.transform.localScale = new Vector3(1, 50, 10);
-                cb3.transform.localScale = new Vector3(10, 1, 15);
+                crevasseFloor.transform.localScale = new Vector3(10, 1, 15);
+
+                GameObject[] aveGroundTiles = new GameObject[10];
+                GameObject[] aveBuildingTiles = new GameObject[10];
+                for (int i = 0; i < 5; i++) {
+                    int adj = i - 2;
+                    //topside
+                    aveGroundTiles[i] = Instantiate(
+                        aveGroundPref[0],
+                        new Vector3((x - gridDim / 2) * 10 + (2*adj), 0, (y - gridDim / 2 + midRatio) * 10 + 6f + (adj*2f*tdata.aveSlope)),
+                        Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
+                    aveGroundTiles[i].transform.localScale = new Vector3(1, 1, 0.3f * Mathf.Abs(tdata.aveSlope) + 1f);
+
+                    if ((i == 0 && !tdata.path[1]) || (i == 4 && !tdata.path[3]) || (i != 0 && i != 4)) {
+                        aveBuildingTiles[i] = Instantiate(
+                            aveBuildingPref[0],
+                            new Vector3((x - gridDim / 2) * 10 + (2*adj), 0, (y - gridDim / 2 + midRatio) * 10 + 6f + (2*adj*tdata.aveSlope)),
+                            Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
+                        aveBuildingTiles[i].transform.localScale = new Vector3(1, 1, 0.3f * Mathf.Abs(tdata.aveSlope) + 1f);
+                    }
+                    
+
+                    //bottom side
+                    aveGroundTiles[i+5] = Instantiate(
+                        aveGroundPref[0],
+                        new Vector3((x - gridDim / 2) * 10 + (2*adj), 0, (y - gridDim / 2 + midRatio) * 10 - 6f + (adj * 2f * tdata.aveSlope)),
+                        Quaternion.AngleAxis(tdata.aveAngle+180, Vector3.up));
+                    aveGroundTiles[i+5].transform.localScale = new Vector3(1, 1, 0.3f * Mathf.Abs(tdata.aveSlope) + 1f);
+
+                    if ((i == 0 && !tdata.path[1]) || (i == 4 && !tdata.path[3]) || (i != 0 && i != 4)) {
+                        aveBuildingTiles[i+5] = Instantiate(
+                            aveBuildingPref[0],
+                            new Vector3((x - gridDim / 2) * 10 + (2*adj), 0, (y - gridDim / 2 + midRatio) * 10 - 6f + (2 * adj * tdata.aveSlope)),
+                            Quaternion.AngleAxis(tdata.aveAngle + 180, Vector3.up));
+                        aveBuildingTiles[i+5].transform.localScale = new Vector3(1, 1, 0.3f * Mathf.Abs(tdata.aveSlope) + 1f);
+                    }
+                }
             }
-            else {
+            else if (!tdata.affectedAve) {
+                instantiated[x, y] = true;
                 int prefIdx = 12;
 
                 newTile = Instantiate(
@@ -130,7 +160,92 @@ public class WorldManager : MonoBehaviour {
                     new Vector3((x - gridDim / 2) * 10, 0, (y - gridDim / 2) * 10),
                     Quaternion.identity);
 
-                instantiated[x, y] = true;
+
+                if (tdata.path[3]) {
+                    GameObject wE2 = Instantiate(
+                        buildingPref[0],
+                        new Vector3((x - gridDim / 2) * 10 + 3, 0, (y - gridDim / 2) * 10 + 2),
+                        Quaternion.identity);
+                    GameObject wE3 = Instantiate(
+                        buildingPref[0],
+                        new Vector3((x - gridDim / 2) * 10 + 3, 0, (y - gridDim / 2) * 10),
+                        Quaternion.identity);
+                    GameObject wE4 = Instantiate(
+                        buildingPref[0],
+                        new Vector3((x - gridDim / 2) * 10 + 3, 0, (y - gridDim / 2) * 10 - 2),
+                        Quaternion.identity);
+
+                    if (!tdata.path[0]) {
+                        GameObject wE1 = Instantiate(
+                            buildingPref[0],
+                            new Vector3((x - gridDim / 2) * 10 + 3, 0, (y - gridDim / 2) * 10 + 4),
+                            Quaternion.identity);
+                    }
+
+                    if (!tdata.path[2]) {
+                        GameObject wE5 = Instantiate(
+                            buildingPref[0],
+                            new Vector3((x - gridDim / 2) * 10 + 3, 0, (y - gridDim / 2) * 10 - 4),
+                            Quaternion.identity);
+                    }
+                }
+
+                if (tdata.path[2]) {
+                    GameObject wS2 = Instantiate(
+                        buildingPref[0],
+                        new Vector3((x - gridDim / 2) * 10 + 2, 0, (y - gridDim / 2) * 10 - 3),
+                        Quaternion.AngleAxis(90, Vector3.up));
+                    GameObject wS3 = Instantiate(
+                        buildingPref[0],
+                        new Vector3((x - gridDim / 2) * 10, 0, (y - gridDim / 2) * 10 - 3),
+                        Quaternion.AngleAxis(90, Vector3.up));
+                    GameObject wS4 = Instantiate(
+                        buildingPref[0],
+                        new Vector3((x - gridDim / 2) * 10 - 2, 0, (y - gridDim / 2) * 10 - 3),
+                        Quaternion.AngleAxis(90, Vector3.up));
+
+                    if (!tdata.path[3]) {
+                        GameObject wS1 = Instantiate(
+                            buildingPref[0],
+                            new Vector3((x - gridDim / 2) * 10 + 4, 0, (y - gridDim / 2) * 10 -3),
+                            Quaternion.identity);
+                    }
+
+                    if (!tdata.path[1]) {
+                        GameObject wS5 = Instantiate(
+                            buildingPref[0],
+                            new Vector3((x - gridDim / 2) * 10 - 4, 0, (y - gridDim / 2) * 10 - 3),
+                            Quaternion.identity);
+                    }
+                }
+
+                GameObject wW2 = Instantiate(
+                    buildingPref[0],
+                    new Vector3((x - gridDim / 2) * 10 - 3, 0, (y - gridDim / 2) * 10 + 2),
+                    Quaternion.AngleAxis(180, Vector3.up));
+                GameObject wW3 = Instantiate(
+                    buildingPref[0],
+                    new Vector3((x - gridDim / 2) * 10 - 3, 0, (y - gridDim / 2) * 10),
+                    Quaternion.AngleAxis(180, Vector3.up));
+                GameObject wW4 = Instantiate(
+                    buildingPref[0],
+                    new Vector3((x - gridDim / 2) * 10 - 3, 0, (y - gridDim / 2) * 10 - 2),
+                    Quaternion.AngleAxis(180, Vector3.up));
+
+                GameObject wN2 = Instantiate(
+                    buildingPref[0],
+                    new Vector3((x - gridDim / 2) * 10 + 2, 0, (y - gridDim / 2) * 10 + 3),
+                    Quaternion.AngleAxis(90, Vector3.up));
+                GameObject wN3 = Instantiate(
+                    buildingPref[0],
+                    new Vector3((x - gridDim / 2) * 10, 0, (y - gridDim / 2) * 10 + 3),
+                    Quaternion.AngleAxis(90, Vector3.up));
+                GameObject wN4 = Instantiate(
+                    buildingPref[0],
+                    new Vector3((x - gridDim / 2) * 10 - 2, 0, (y - gridDim / 2) * 10 + 3),
+                    Quaternion.AngleAxis(90, Vector3.up));
+
+
 
                 list.Add(new Tuple<GameObject, int, int>(newTile, x, y));
             }
@@ -147,12 +262,14 @@ public class WorldManager : MonoBehaviour {
         int zoneX = x >= 0 ? (x / 4) : (((x + 1) / 4) - 1);
         int zoneY = y >= 0 ? (y / 4) : (((y + 1) / 4) - 1);
 
+
         //if in even ave zone
         if ( zoneY % 2 == 0 ) {
             int[] endPoints = GetAveEndPoints(zoneX, zoneY);
             float vertDiff = (endPoints[1] - endPoints[0]);
             float slope = vertDiff / zoneDim;
 
+            tile.aveSlope = slope;
             
             int relX = x % zoneDim;
             int relY = y % zoneDim;
@@ -164,15 +281,26 @@ public class WorldManager : MonoBehaviour {
 
             tile.aveAngle = -1 * Mathf.Atan2(vertDiff, zoneDim) * Mathf.Rad2Deg + 90;
 
-            if ((tile.aveLRatio >= 0 && tile.aveLRatio <= 1) || 
-                (tile.aveRRatio >= 0 && tile.aveRRatio <= 1)) {
+            if ((tile.aveLRatio >= 0f && tile.aveLRatio <= 1f) ||
+                (tile.aveRRatio >= 0f && tile.aveRRatio <= 1f)) {
                 tile.hasAve = true;
             }
-
+            if ((tile.aveLRatio >= -0.5f && tile.aveLRatio <= 1.5f) || 
+                (tile.aveRRatio >= -0.5f && tile.aveRRatio <= 1.5f)) {
+                tile.affectedAve = true;
+            }
+            else {
+                
+            }
             for (int i = 0; i < 4; i++) {
                 tile.path[i] = true;
             }
 
+        }
+        else {
+            for (int i = 0; i < 4; i++) {
+                tile.path[i] = true;
+            }
         }
 
         return tile;
@@ -188,7 +316,9 @@ public class WorldManager : MonoBehaviour {
     public class TileData {
         public bool[] path;
         public bool hasAve;
+        public bool affectedAve;
         public float aveAngle; //0=horizontal -> 90=vertical
+        public float aveSlope;
         public float aveLRatio;
         public float aveRRatio;
 
