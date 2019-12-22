@@ -36,56 +36,47 @@ public class WorldManager : MonoBehaviour {
 
     // Update is called once per frame
     void Update() {
-        /*if (playerTransform.position.x > 10*curr) {
-            Instantiate(tile, new Vector3(curr * 10 + 5, 0, 0), Quaternion.identity);
-            curr++;
-        }*/
-
+        //convert world coords to index
         int currX = ((int)playerTransform.position.x/10) + gridDim/2;
         int currZ = ((int)playerTransform.position.z/10) + gridDim/2;
 
+        //destroying and marking tiles for list deletion
+        ArrayList toDelete = new ArrayList();
         foreach (Tuple<GameObject,int,int> tup in tileList) {
             GameObject currTile = tup.Item1;
             Vector3 diff = playerTransform.position - currTile.GetComponent<Transform>().position;
             
             if (diff.magnitude > 25f) {
                 instantiated[tup.Item2, tup.Item3] = false;
-                tileList.Remove(tup);
+                toDelete.Add(tup);
                 Destroy(currTile);
             }
         }
 
-        GameObject newTile = InstantiateTile(currX, currZ, tileList);
-        //if (newTile != null) tileList.Add(new Tuple<GameObject,int,int>(newTile, currX+1, currZ));
-        newTile = InstantiateTile(currX+1, currZ, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        newTile = InstantiateTile(currX+1, currZ + 1, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        newTile = InstantiateTile(currX, currZ + 1, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        newTile = InstantiateTile(currX-1, currZ + 1, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        newTile = InstantiateTile(currX-1, currZ, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        newTile = InstantiateTile(currX-1, currZ - 1, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        newTile = InstantiateTile(currX, currZ - 1, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        newTile = InstantiateTile(currX+1, currZ - 1, tileList);
-        //if (newTile != null) tileList.Add(newTile);
-        /*Instantiate(
-            tilePref[DetermineTileType(TileData[currX, currY].path)], 
-            new Vector3(currX * 10 + 5, currY * 10 + 5, 0), 
-            Quaternion.identity);*/
+        //instantiate new tiles
+        InstantiateTile(currX, currZ, tileList);
+        InstantiateTile(currX+1, currZ, tileList);
+        InstantiateTile(currX+1, currZ + 1, tileList);
+        InstantiateTile(currX, currZ + 1, tileList);
+        InstantiateTile(currX-1, currZ + 1, tileList);
+        InstantiateTile(currX-1, currZ, tileList);
+        InstantiateTile(currX-1, currZ - 1, tileList);
+        InstantiateTile(currX, currZ - 1, tileList);
+        InstantiateTile(currX+1, currZ - 1, tileList);
+
+        //remove from list existing list
+        foreach (Tuple<GameObject, int, int> tup in toDelete) {
+            tileList.Remove(tup);
+        }
     }
 
     private GameObject InstantiateTile(int x, int y, ArrayList list) {
         GameObject newTile = null;
         if (!instantiated[x,y]) {
             int prefIdx = DetermineTileType(tiles[x, y].path);
-            Debug.Log(x + " " + y + " " + prefIdx);
+            //Debug.Log(x + " " + y + " " + prefIdx);
             newTile = Instantiate(
-                /*tilePref[0]*/tilePref[prefIdx],
+                tilePref[prefIdx],
                 new Vector3((x-gridDim/2) * 10, 0, (y - gridDim / 2) * 10),
                 Quaternion.identity);
             instantiated[x, y] = true;
@@ -199,7 +190,7 @@ public class WorldManager : MonoBehaviour {
             int y = curr.Item2;
 
             Debug.Log("Coord: " + x + " " + y);
-            if (toExplore.Count > 0) Debug.Log("queue: " + toExplore.Peek());
+            //if (toExplore.Count > 0) Debug.Log("queue: " + toExplore.Peek());
 
             BorderState[] bs = DetermineTileBorders(
                 rand.Next(0, 100),
