@@ -3,27 +3,37 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum BorderState { Undefined, Closed, Opened };
+//public enum BorderState { Undefined, Closed, Opened };
 
 public class WorldManager : MonoBehaviour {
 
     public GameObject player;
     private Transform playerTransform;
     public GameObject[] tilePref;
+    public GameObject cube;
+
+    public int zoneDim = 4;
+    private CoordRandom zoneRand;
+    private CoordRandom tileRand;
+    public int seed = 100;
 
     private int curr = 0;
     //private GameObject[][] tiles = new GameObject[1000][1000]();
-    
+
     public TileData[,] tiles;
     public bool[,] instantiated;
     private int gridDim = 40;
     private ArrayList tileList;
 
+    private int width = 50;
+    private int height = 50;
+
+
     // Start is called before the first frame update
     void Start() {
         playerTransform = player.GetComponent<Transform>();
 
-        tiles = GeneratePaths(gridDim);
+        //tiles = GeneratePaths(gridDim);
         instantiated = new bool[gridDim, gridDim];
         for (int i = 0; i < gridDim; i++) {
             for (int j = 0; j < gridDim; j++) {
@@ -32,14 +42,26 @@ public class WorldManager : MonoBehaviour {
         }
 
         tileList = new ArrayList();
+
+
+        //testing perlin
+        for (int i = 0; i < 10; i++) {
+            Debug.Log(i + " " + Mathf.PerlinNoise(0.1f, ((float)i/10)));
+        }
+
+        zoneRand = new CoordRandom(seed);
+        tileRand = new CoordRandom(seed+1);
+        //Debug.Log(i + " " + crand.GetInt(i, j, 0, 4));
+
     }
 
     // Update is called once per frame
     void Update() {
         //convert world coords to index
-        int currX = ((int)playerTransform.position.x/10) + gridDim/2;
-        int currZ = ((int)playerTransform.position.z/10) + gridDim/2;
+        int currX = ((int)playerTransform.position.x / 10) + gridDim / 2;
+        int currZ = ((int)playerTransform.position.z / 10) + gridDim / 2;
 
+        /*
         //destroying and marking tiles for list deletion
         ArrayList toDelete = new ArrayList();
         foreach (Tuple<GameObject,int,int> tup in tileList) {
@@ -51,7 +73,7 @@ public class WorldManager : MonoBehaviour {
                 toDelete.Add(tup);
                 Destroy(currTile);
             }
-        }
+        }*/
 
         //instantiate new tiles
         InstantiateTile(currX, currZ, tileList);
@@ -64,240 +86,117 @@ public class WorldManager : MonoBehaviour {
         InstantiateTile(currX, currZ - 1, tileList);
         InstantiateTile(currX+1, currZ - 1, tileList);
 
+        /*
         //remove from list existing list
         foreach (Tuple<GameObject, int, int> tup in toDelete) {
             tileList.Remove(tup);
-        }
+        }*/
     }
 
     private GameObject InstantiateTile(int x, int y, ArrayList list) {
         GameObject newTile = null;
-        if (!instantiated[x,y]) {
-            int prefIdx = DetermineTileType(tiles[x, y].path);
-            //Debug.Log(x + " " + y + " " + prefIdx);
-            newTile = Instantiate(
-                tilePref[prefIdx],
-                new Vector3((x-gridDim/2) * 10, 0, (y - gridDim / 2) * 10),
-                Quaternion.identity);
-            instantiated[x, y] = true;
+        TileData tdata = GetTileData(x,y);
 
-            list.Add(new Tuple<GameObject, int, int>(newTile, x, y));
+        if (!instantiated[x, y]) {
+            /*int prefIdx = DetermineTileType(tiles[x, y].path);
+            Debug.Log("prefab idx " + prefIdx);*/
+            
+
+            if (tdata.hasAve) {
+                float midRatio = (tdata.aveLRatio + tdata.aveRRatio)/ 2;
+                GameObject cb1 = Instantiate(
+                    cube,
+                    new Vector3((x - gridDim / 2) * 10, -25, (y - gridDim / 2 + midRatio) * 10 + 2.5f),
+                    Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
+
+                GameObject cb2 = Instantiate(
+                    cube,
+                    new Vector3((x - gridDim / 2) * 10, -25, (y - gridDim / 2 + midRatio) * 10 - 2.5f),
+                    Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
+                GameObject cb3 = Instantiate(
+                    cube,
+                    new Vector3((x - gridDim / 2) * 10, -50, (y - gridDim / 2 + midRatio) * 10),
+                    Quaternion.AngleAxis(tdata.aveAngle, Vector3.up));
+
+                cb1.transform.localScale = new Vector3(1, 50, 10);
+                cb2.transform.localScale = new Vector3(1, 50, 10);
+                cb3.transform.localScale = new Vector3(10, 1, 15);
+            }
+            else {
+                int prefIdx = 12;
+
+                newTile = Instantiate(
+                    tilePref[prefIdx],
+                    new Vector3((x - gridDim / 2) * 10, 0, (y - gridDim / 2) * 10),
+                    Quaternion.identity);
+
+                instantiated[x, y] = true;
+
+                list.Add(new Tuple<GameObject, int, int>(newTile, x, y));
+            }
+            
         }
 
         return newTile;
     }
 
-    private int DetermineTileType(BorderState[] border) {
+    
+    private TileData GetTileData(int x, int y) {
+        TileData tile = new TileData();
 
-        int type = 0;
-        if (border[0] == BorderState.Opened) {
-            if (border[1] == BorderState.Opened) {
-                if (border[2] == BorderState.Opened) {
-                    if (border[3] == BorderState.Opened) {
-                        type = 10;
-                    }
-                    else {
-                        type = 6;
-                    }
-                }
-                else {
-                    if (border[3] == BorderState.Opened) {
-                        type = 7;
-                    }
-                    else {
-                        type = 2;
-                    }
-                }
+        int zoneX = x >= 0 ? (x / 4) : (((x + 1) / 4) - 1);
+        int zoneY = y >= 0 ? (y / 4) : (((y + 1) / 4) - 1);
+
+        //if in even ave zone
+        if ( zoneY % 2 == 0 ) {
+            int[] endPoints = GetAveEndPoints(zoneX, zoneY);
+            float vertDiff = (endPoints[1] - endPoints[0]);
+            float slope = vertDiff / zoneDim;
+
+            
+            int relX = x % zoneDim;
+            int relY = y % zoneDim;
+
+            float loc1 = endPoints[0] + (relX * slope);
+            tile.aveLRatio = loc1 - relY;
+            float loc2 = endPoints[0] + ((relX+1) * slope);
+            tile.aveRRatio = loc2 - relY;
+
+            tile.aveAngle = -1 * Mathf.Atan2(vertDiff, zoneDim) * Mathf.Rad2Deg + 90;
+
+            if ((tile.aveLRatio >= 0 && tile.aveLRatio <= 1) || 
+                (tile.aveRRatio >= 0 && tile.aveRRatio <= 1)) {
+                tile.hasAve = true;
             }
-            else {
-                if (border[2] == BorderState.Opened) {
-                    if (border[3] == BorderState.Opened) {
-                        type = 8;
-                    }
-                    else {
-                        type = 1;
-                    }
-                }
-                else {
-                    if (border[3] == BorderState.Opened) {
-                        type = 3;
-                    }
-                    else {
-                        type = -1;
-                    }
-                }
-            }
-        }
-        else { //0
-            if (border[1] == BorderState.Opened) {
-                if (border[2] == BorderState.Opened) {
-                    if (border[3] == BorderState.Opened) {
-                        type = 9;
-                    }
-                    else { //3
-                        type = 5;
-                    }
-                }
-                else { //2
-                    if (border[3] == BorderState.Opened) {
-                        type = 0;
-                    }
-                    else {
-                        type = -1;
-                    }
-                }
-            }
-            else { // 1
-                if (border[2] == BorderState.Opened) {
-                    if (border[3] == BorderState.Opened) {
-                        type = 4;
-                    }
-                    else { //3
-                        type = -1;
-                    }
-                }
-                else { //2
-                    if (border[3] == BorderState.Opened) {
-                        type = -1;
-                    }
-                    else {
-                        type = -1;
-                    }
-                }
-            }
-        }
 
-        if (type == -1) type = 10;
-        return type;
-    }
-
-    private TileData[,] GeneratePaths(int dim) {
-        TileData[,] myTiles = new TileData[dim,dim];
-        System.Random rand = new System.Random(0);
-
-        Queue<Tuple<int,int>> toExplore = new Queue<Tuple<int, int>>();
-        toExplore.Enqueue(new Tuple<int,int>(dim/2, dim/2));
-
-        for (int i = 0; i < dim; i++) {
-            for (int j = 0; j < dim; j++) {
-                myTiles[i, j] = new TileData();
-            }
-        }
-
-        while (toExplore.Count > 0) {
-            Tuple<int, int> curr = toExplore.Dequeue();
-            int x = curr.Item1;
-            int y = curr.Item2;
-
-            Debug.Log("Coord: " + x + " " + y);
-            //if (toExplore.Count > 0) Debug.Log("queue: " + toExplore.Peek());
-
-            BorderState[] bs = DetermineTileBorders(
-                rand.Next(0, 100),
-                new BorderState[] {y > 0 ? myTiles[x, y-1].path[0] : BorderState.Closed,
-                x < dim-1 ? myTiles[x+1, y].path[1] : BorderState.Closed,
-                y < dim-1 ? myTiles[x, y+1].path[2] : BorderState.Closed,
-                x > 0 ? myTiles[x-1, y].path[3] : BorderState.Closed }
-                );
-
-            myTiles[x, y].SetPath(bs);
-            myTiles[x, y].established = true;
-
-            //add to queue
-            if (x < dim-1 && !myTiles[x+1,y].established) {
-                toExplore.Enqueue(new Tuple<int, int>(x+1, y));
-            }
-            else if (x > 0 && !myTiles[x-1, y].established) {
-                toExplore.Enqueue(new Tuple<int, int>(x-1, y));
-            }
-            else if (y < dim-1 && !myTiles[x, y+1].established) {
-                toExplore.Enqueue(new Tuple<int, int>(x, y+1));
-            }
-            else if (y > 0 && !myTiles[x, y-1].established) {
-                toExplore.Enqueue(new Tuple<int, int>(x, y-1));
+            for (int i = 0; i < 4; i++) {
+                tile.path[i] = true;
             }
 
         }
 
-        /*for (int i = 0; i < 10; i++) {
-            Debug.Log("rand #" + i + " " + rand.Next(0, 100));
-        }*/
-
-        return myTiles;
+        return tile;
     }
 
-    private BorderState[] DetermineTileBorders(int num, 
-        BorderState[] border) {
+    private int[] GetAveEndPoints(int zoneX, int zoneY) {
+        int loc1 = zoneRand.GetInt(zoneX, zoneY, 1, 3);
+        int loc2 = zoneRand.GetInt(zoneX+1, zoneY, 1, 3);
 
-        //BorderState[] res = new BorderState[4];
+        return new int[] { loc1, loc2 };
+    }
 
-        int undefCount = 0;
-        for (int i = 0; i < 3; i++) {
-            if (border[i] == BorderState.Undefined) undefCount++;
+    public class TileData {
+        public bool[] path;
+        public bool hasAve;
+        public float aveAngle; //0=horizontal -> 90=vertical
+        public float aveLRatio;
+        public float aveRRatio;
+
+        public TileData() {
+            path = new bool[4] { false, false, false, false };
+            hasAve = false;
+            
         }
-
-        int[] order = new int[4] { 3,0,1,2 };
-        for (int i = 0; i < 3; i++) {
-            int curr = order[i];
-            if (border[curr] == BorderState.Undefined) {
-                switch (undefCount) {
-                    case 1:
-                        if (num < 10)
-                            border[curr] = BorderState.Opened;
-                        else
-                            border[curr] = BorderState.Closed;
-                        break;
-                    case 2:
-                        if (num < 20)
-                            border[curr] = BorderState.Opened;
-                        else
-                            border[curr] = BorderState.Closed;
-                        break;
-                    case 3:
-                        if (num < 35)
-                            border[curr] = BorderState.Opened;
-                        else
-                            border[curr] = BorderState.Closed;
-                        break;
-                }
-            }
-        }
-
-        //50% straight
-        //20% building
-        //10% cross
-        //10% T junc
-        //10% corner
-
-        return border;
-    }
-}
-
-public class TileData {
-    public BorderState[] path;
-    public bool established;
-
-    public TileData(
-        BorderState n = BorderState.Undefined, 
-        BorderState w = BorderState.Undefined, 
-        BorderState s = BorderState.Undefined, 
-        BorderState e = BorderState.Undefined) {
-
-        path = new BorderState[4] { n,w,s,e };
-        established = false;
     }
 
-    public void SetPath(
-        BorderState n = BorderState.Undefined,
-        BorderState w = BorderState.Undefined,
-        BorderState s = BorderState.Undefined,
-        BorderState e = BorderState.Undefined) {
-
-        path = new BorderState[4] { n, w, s, e };
-    }
-
-    public void SetPath(BorderState[] border) {
-
-        path = border;
-    }
 }
