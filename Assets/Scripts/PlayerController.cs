@@ -26,7 +26,7 @@ public class PlayerController : MonoBehaviour {
     // Update is called once per frame
     void Update() {
 
-        rb.velocity = new Vector3(joystick.Horizontal * 5f, rb.velocity.y, joystick.Vertical * 5f);
+        rb.velocity = new Vector3(joystick.Horizontal * 5f * 5, 0, joystick.Vertical * 5f  *5); //rb.velocity.y
         anim.SetFloat("movementSpeed", rb.velocity.magnitude);
 
         float angle = lastAngle;
