@@ -12,6 +12,7 @@ public class PlayerController : MonoBehaviour {
     private Rigidbody rb;
     private Transform transform;
     private float lastAngle = 90f;
+    public float speed;
 
     // Start is called before the first frame update
     void Start() {
@@ -20,13 +21,14 @@ public class PlayerController : MonoBehaviour {
         joystick = FindObjectOfType<FixedJoystick>();
 
         rb = GetComponent<Rigidbody>();
+        rb.useGravity = false;
         transform = GetComponent<Transform>();
     }
 
     // Update is called once per frame
     void Update() {
 
-        rb.velocity = new Vector3(joystick.Horizontal * 5f * 5, 0, joystick.Vertical * 5f  *5); //rb.velocity.y
+        rb.velocity = new Vector3(joystick.Horizontal * 5f * speed, 0, joystick.Vertical * 5f  * speed); //rb.velocity.y
         anim.SetFloat("movementSpeed", rb.velocity.magnitude);
 
         float angle = lastAngle;
