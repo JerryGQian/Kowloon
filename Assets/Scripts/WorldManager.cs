@@ -12,11 +12,7 @@ public class WorldManager : MonoBehaviour {
     public GameObject player;
     private Transform playerTransform;
 
-    public GameObject[] tilePref;
     public GameObject cube;
-    public GameObject[] buildingPref;
-    public GameObject[] aveBuildingPref;
-    public GameObject[] aveGroundPref;
     public GameObject indicubeRed;
     public GameObject indicubeGreen;
 
@@ -31,14 +27,17 @@ public class WorldManager : MonoBehaviour {
 
     private CoordRandom pointRand;
 
-    public TileData[,] tiles;
-    
-    private ArrayList tileList;
-
     //private List<Tuple<Tuple<int,int>,List<GameObject>>> zoneObjects;
     private LinkedList<GameObject>[,] zoneObjects;
     private HashSet<Vector2> zonesInstantiated;
     private bool[,] isInstantiated;
+
+    // Object pool ////////////////////
+    private Vector3 poolLocation;
+
+    private Queue<GameObject> streetQueue;
+    public GameObject streetObj;
+
 
     // The number of polygons/sites we want
 
@@ -62,10 +61,16 @@ public class WorldManager : MonoBehaviour {
             }
         }
 
-        tileList = new ArrayList();
-
-        //zoneObjects = new LinkedList<GameObject>[storageDim, storageDim];
         zonesInstantiated = new HashSet<Vector2>();
+
+        // Object Pool Initialization
+        poolLocation = new Vector3(0, -10, 0);
+        // initialize street object pool
+        streetQueue = new Queue<GameObject>();
+        for (int i = 0; i < 200; i++) {
+            streetQueue.Enqueue(
+                Instantiate(streetObj, poolLocation, Quaternion.identity));
+        }
 
         /*
         //testing perlin
@@ -89,6 +94,9 @@ public class WorldManager : MonoBehaviour {
         if (playerTransform.position.z < 0)
             currY--;
 
+
+        // INSTANTIATION /////////////////////
+
         //check if in a zone that needs new Voronoi
         bool needsNewVoronoi = false;
         for (int i = -1; i <= 1; i++) {
@@ -104,17 +112,25 @@ public class WorldManager : MonoBehaviour {
             Voronoi voronoi = GenerateVoronoi(currX, currY);
 
             InstantiateVoronoi(voronoi, currX, currY);
-            Debug.Log("Instantiating: " + currX + " " + currY);
             isInstantiated[currX + halfStorageDim, currY + halfStorageDim] = true;
         }
 
+        // DELETION //////////////////////////
+
         Vector2 curr = new Vector2(currX, currY);
+        List<Vector2> toRemove = new List<Vector2>();
+        //search for existing zones that are too far
         foreach (Vector2 zone in zonesInstantiated) {
             Vector2 diff = zone - curr;
             if (diff.x < -1 || diff.x > 1 ||
                 diff.y < -1 || diff.y > 1) {
-                DestroyZone((int)zone.x, (int)zone.y);
+                RecycleZone((int)zone.x, (int)zone.y);
+                toRemove.Add(zone);
             }
+        }
+        //avoid concurrent modification
+        foreach (Vector2 zone in toRemove) {
+            zonesInstantiated.Remove(zone);
         }
     }
 
@@ -177,7 +193,7 @@ public class WorldManager : MonoBehaviour {
 
             Debug.Log(edge.ClippedEnds[LR.LEFT] + " " +  edge.ClippedEnds[LR.RIGHT]);
 
-            InstantiateRoad(edge.ClippedEnds[LR.LEFT], edge.ClippedEnds[LR.RIGHT], zoneX, zoneY);
+            ApplyStreet(edge.ClippedEnds[LR.LEFT], edge.ClippedEnds[LR.RIGHT], zoneX, zoneY);
             //InstantiateWall(edge.ClippedEnds[LR.LEFT], edge.ClippedEnds[LR.RIGHT], zoneX, zoneY);
         }
 
@@ -194,7 +210,7 @@ public class WorldManager : MonoBehaviour {
         }
     }
 
-    private void InstantiateRoad(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
+    private void InstantiateStreet(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
         float x0 = (float)p0.x;
         float y0 = (float)p0.y;
         float x1 = (float)p1.x;
@@ -215,6 +231,36 @@ public class WorldManager : MonoBehaviour {
 
         Vector2 zone = DetermineZone(zoneX, zoneY, x, y);
         zoneObjects[(int)zone.x + halfStorageDim, (int)zone.y + halfStorageDim].AddLast(road);
+    }
+
+    private void ApplyStreet(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
+        float x0 = (float)p0.x;
+        float y0 = (float)p0.y;
+        float x1 = (float)p1.x;
+        float y1 = (float)p1.y;
+
+        float x = (float)(x0 + x1) / 2;
+        float y = (float)(y0 + y1) / 2;
+
+        Vector2 vec = new Vector2(x1 - x0, y1 - y0);
+
+        float angle = Mathf.Atan2(x1 - x0, y1 - y0) * Mathf.Rad2Deg + 90;
+
+        GameObject street = streetQueue.Dequeue();
+        Transform trans = street.GetComponent<Transform>();
+
+        trans.position = new Vector3(x, 0, y);
+        trans.rotation = Quaternion.AngleAxis(angle, Vector3.up);
+        trans.localScale = new Vector3(vec.magnitude, 1, streetWidth);
+
+        /*GameObject road = Instantiate(
+                    cube,
+                    new Vector3(x, 0, y),
+                    Quaternion.AngleAxis(angle, Vector3.up));
+        road.transform.localScale = new Vector3(vec.magnitude, 1, streetWidth);*/
+
+        Vector2 zone = DetermineZone(zoneX, zoneY, x, y);
+        zoneObjects[(int)zone.x + halfStorageDim, (int)zone.y + halfStorageDim].AddLast(street);
     }
 
     private void InstantiateWall(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
@@ -261,6 +307,20 @@ public class WorldManager : MonoBehaviour {
         }
 
         list.Clear();
+        isInstantiated[zoneX + halfStorageDim, zoneY + halfStorageDim] = false;
+    }
+
+    private void RecycleZone(int zoneX, int zoneY) {
+        LinkedList<GameObject> list = zoneObjects[zoneX + halfStorageDim, zoneY + halfStorageDim];
+
+        foreach (GameObject obj in list) {
+            //streets only:
+            streetQueue.Enqueue(obj);
+            //Destroy(obj);
+        }
+
+        list.Clear();
+        isInstantiated[zoneX + halfStorageDim, zoneY + halfStorageDim] = false;
     }
 
     // HELPER FUNCTIONS ///////////////////////////////////////////////////////
