@@ -879,7 +879,7 @@ MonoBehaviour:
   polygonNumber: 2
   seed: 1000
   zoneDim: 40
-  streetWidth: 3
+  streetWidth: 4
   wallHeight: 3
 --- !u!1 &1642968695
 GameObject:
