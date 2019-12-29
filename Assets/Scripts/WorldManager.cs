@@ -28,35 +28,40 @@ public class WorldManager : MonoBehaviour {
     private CoordRandom pointRand;
 
     //private List<Tuple<Tuple<int,int>,List<GameObject>>> zoneObjects;
-    private LinkedList<GameObject>[,] zoneObjects;
+    private LinkedList<GameObject>[,] zoneObjects; //to remove...
+    private LinkedList<GameObject>[,] zoneStreetObjects;
+    private LinkedList<GameObject>[,] zoneWallObjects;
+
     private HashSet<Vector2> zonesInstantiated;
     private bool[,] isInstantiated;
 
     // Object pool ////////////////////
     private Vector3 poolLocation;
 
+    public int numStreets = 200;
     private Queue<GameObject> streetQueue;
     public GameObject streetObj;
 
-
-    // The number of polygons/sites we want
-
-
-    // This is where we will store the resulting data
-    private Dictionary<Vector2f, Site> sites;
-    private List<Edge> edges;
+    public int numWalls = 6000;
+    private Queue<GameObject> wallQueue;
+    public GameObject wallObj;
 
     // Start is called before the first frame update
     void Start() {
         playerTransform = player.GetComponent<Transform>();
-
+        pointRand = new CoordRandom(seed);
         halfStorageDim = (int)(storageDim / 2);
 
-        zoneObjects = new LinkedList<GameObject>[storageDim, storageDim];
+        zoneObjects = new LinkedList<GameObject>[storageDim, storageDim]; //to remove...
+        zoneStreetObjects = new LinkedList<GameObject>[storageDim, storageDim];
+        zoneWallObjects = new LinkedList<GameObject>[storageDim, storageDim];
         isInstantiated = new bool[storageDim, storageDim];
         for (int i = 0; i < storageDim; i++) {
             for (int j = 0; j < storageDim; j++) {
-                zoneObjects[i, j] = new LinkedList<GameObject>();
+                zoneObjects[i, j] = new LinkedList<GameObject>(); //to remove...
+                zoneStreetObjects[i, j] = new LinkedList<GameObject>();
+                zoneWallObjects[i, j] = new LinkedList<GameObject>();
+
                 isInstantiated[i, j] = false;
             }
         }
@@ -67,9 +72,15 @@ public class WorldManager : MonoBehaviour {
         poolLocation = new Vector3(0, -10, 0);
         // initialize street object pool
         streetQueue = new Queue<GameObject>();
-        for (int i = 0; i < 200; i++) {
+        for (int i = 0; i < numStreets; i++) {
             streetQueue.Enqueue(
                 Instantiate(streetObj, poolLocation, Quaternion.identity));
+        }
+        // initialize wall object pool
+        wallQueue = new Queue<GameObject>();
+        for (int i = 0; i < numWalls; i++) {
+            wallQueue.Enqueue(
+                Instantiate(wallObj, poolLocation, Quaternion.identity));
         }
 
         /*
@@ -79,8 +90,7 @@ public class WorldManager : MonoBehaviour {
         }
         */
 
-        pointRand = new CoordRandom(seed);
-        Debug.Log(pointRand);
+        //BuildWall(new Vector2f(0,0), new Vector2f(16,16), 0, 0);
     }
 
     // Update is called once per frame
@@ -179,23 +189,191 @@ public class WorldManager : MonoBehaviour {
 
         RegisterInstantiatedZones(zoneX, zoneY);
 
-        /*foreach (KeyValuePair<Vector2f, Site> kv in sites) {
+        foreach (KeyValuePair<Vector2f, Site> kv in sites) {
+            //if (!SiteInBound(kv.Value, lowerBound, upperBound)) continue;
             Instantiate(
                     indicubeRed,
                     new Vector3(kv.Key.x, 0, kv.Key.y),
                     Quaternion.AngleAxis(0, Vector3.up));
-        }*/
+
+            //Debug.Log("Edges of" + kv.Key + " = " + kv.Value.Edges);
+            string s = "" + kv.Value.Edges.Count;
+            int len = kv.Value.Edges.Count;
+            int i = 0;
+
+            //Dictionary<Vector2f, Tuple<Vector2f, Vector2f>> map = new Dictionary<Vector2f, Tuple<Vector2f, Vector2f>>();
+            
+            //This implementation is the ugliest code I have ever written, I apologize, dear reader...
+            List<Tuple<Vector2f, Vector2f, Vector2f>> cornerRelationList = new List<Tuple<Vector2f, Vector2f, Vector2f>>();
+            List<Tuple<Vector2f, Vector2f>> cornerPositionList = new List<Tuple<Vector2f, Vector2f>>();
+            //Dictionary<Vector2f, Vector2f> cornerMap = new Dictionary<Vector2f, Vector2f>();
+
+            foreach (Edge edge in kv.Value.Edges) {
+                s += " | " + i + "->";
+                i++;
+                
+                if (edge.ClippedEnds == null) continue;
+                //if (!EdgeInBound(edge, lowerBound, upperBound)) continue;
+
+                Vector2f leftV = edge.ClippedEnds[LR.LEFT];
+                Vector2f rightV = edge.ClippedEnds[LR.RIGHT];
+                s += edge.ClippedEnds[LR.LEFT];
+                s += edge.ClippedEnds[LR.RIGHT];
+                //Debug.Log(kv.Key + " this edge: " + leftV + " " + map.ContainsKey(leftV) + " " + rightV + " " + map.ContainsKey(rightV));
+
+                //Update list
+                bool leftFound = false;
+                bool rightFound = false;
+                Tuple<Vector2f, Vector2f, Vector2f> toRemoveLeft = null;
+                Tuple<Vector2f, Vector2f, Vector2f> toRemoveRight = null;
+                foreach (Tuple<Vector2f, Vector2f, Vector2f> tup in cornerRelationList) {
+                    Vector2f diffLeft = tup.Item1 - leftV;
+                    Vector2f diffRight = tup.Item1 - rightV;
+                    if (diffLeft.magnitude < 0.05f) {
+                        toRemoveLeft = tup;
+                        //tup = new Tuple<Vector2f, Vector2f, Vector2f>(leftV, tup.Item2, rightV);
+                        leftFound = true;
+                    }
+                    if (diffRight.magnitude < 0.05f) {
+                        toRemoveRight = tup;
+                        //tup = new Tuple<Vector2f, Vector2f, Vector2f>(rightV, tup.Item2, leftV);
+                        rightFound = true;
+                    }
+                }
+                if (leftFound) {
+                    cornerRelationList.Remove(toRemoveLeft);
+                    cornerRelationList.Add(new Tuple<Vector2f, Vector2f, Vector2f>(leftV, toRemoveLeft.Item2, rightV));
+                }
+                else {
+                    cornerRelationList.Add(new Tuple<Vector2f, Vector2f, Vector2f>(leftV, rightV, rightV));
+                }
+
+                if (rightFound) {
+                    cornerRelationList.Remove(toRemoveRight);
+                    cornerRelationList.Add(new Tuple<Vector2f, Vector2f, Vector2f>(rightV, toRemoveRight.Item2, leftV));
+                }
+                else {
+                    cornerRelationList.Add(new Tuple<Vector2f, Vector2f, Vector2f>(rightV, leftV, leftV));
+                }
+
+                //
+                /*if (map.ContainsKey(leftV))
+                    map[leftV] = new Tuple<Vector2f, Vector2f>(map[leftV].Item1, rightV);
+                else
+                    map[leftV] = new Tuple<Vector2f, Vector2f>(rightV, rightV);
+
+                if (map.ContainsKey(rightV))
+                    map[rightV] = new Tuple<Vector2f, Vector2f>(map[rightV].Item1, leftV);
+                else
+                    map[rightV] = new Tuple<Vector2f, Vector2f>(leftV, leftV);*/
+            }
+            Debug.Log(kv.Key + "-> edges::: " + s);
+
+            //Calculate corner positions for wall ends
+            //foreach (KeyValuePair<Vector2f, Tuple<Vector2f,Vector2f>> kv2 in map) {
+            foreach (Tuple<Vector2f, Vector2f, Vector2f> relation in cornerRelationList) {
+                Vector2f orig = relation.Item1;
+                Vector2f dest1 = relation.Item2;
+                Vector2f dest2 = relation.Item3;
+
+                Vector2f diff1 = dest1 - orig;
+                Vector2f diff2 = dest2 - orig;
+
+                float slope1 = diff1.y / diff1.x;
+                float slope2 = diff2.y / diff2.x + 0.000001f;
+
+                float perp1 = -1f / slope1;
+                float perp2 = -1f / slope2;
+
+                Debug.Log("CORNER:" + kv.Key + " " + orig);
+                Debug.Log(kv.Key  + "slopes: " + slope1 + " " + slope2 + " perps: " + perp1 + " " + perp2);
+                Debug.Log("diffs=" + diff1 + " " + diff2);
+
+                //Vector2 perpVec1 = new Vector2(1, perp1);
+                //Vector2 perpVec2 = new Vector2(1, perp2);
+                Vector2 perpVec1 = new Vector2(-diff1.y, diff1.x);
+                Vector2 perpVec2 = new Vector2(-diff2.y, diff2.x);
+
+                //Debug.Log(perpVec1 + " " + perpVec12);
+
+                Debug.Log("old perpVec1: " + perpVec1 + " " + perpVec2);
+                perpVec1 = perpVec1 * ((streetWidth / 2) / perpVec1.magnitude);
+                perpVec2 = perpVec2 * ((streetWidth / 2) / perpVec2.magnitude);
+                Debug.Log("new perpVec1: " + (perpVec1.x) + "," + (perpVec1.y) + " " + perpVec1.magnitude + " perpVec2=" + (perpVec2.x) + "," + (perpVec2.y));
+
+                float yint1 = perpVec1.y + (Mathf.Pow(perpVec1.x, 2) / perpVec1.y);
+                float yint2 = perpVec2.y + (Mathf.Pow(perpVec2.x, 2) / perpVec2.y);
+
+                if (false) {
+                    yint1 *= -1;
+                    yint2 *= -1;
+                }
+
+                //Debug.Log("yint1and2=" + yint1 + " " + yint2 + " " + Mathf.Abs(perpVec1.y) + " " + (Mathf.Pow(perpVec1.x, 2) / Mathf.Abs(perpVec1.y)));
+
+
+                float x = -1f * (yint1 - yint2) / (slope1 - slope2);
+                float y = slope1 * x + yint1;
+
+                //Debug.Log(perp1 + " " + perp2);
+                //Debug.Log("calcing - orig=" + orig + " - " + x + " " + y + " d1:" + dest1 + " d2:" + dest2);
+
+                Debug.Log("x:"+ x + " y:" + y);
+
+                // if... swap direction
+                /*if (diff1.x < 0 && diff2.x < 0) {
+                    x *= -1;
+                    y *= -1;
+                }*/
+
+                //cornerMap[orig] = new Vector2f(orig.x - x, orig.y - y);
+                cornerPositionList.Add(
+                    new Tuple<Vector2f, Vector2f>(
+                        orig, 
+                        new Vector2f(orig.x + x, orig.y + y)));
+            }
+
+            int c = 0;
+            //BuildWall(new Vector2f(90,69), new Vector2f(94, 65), zoneX, zoneY);
+            foreach (Edge edge in kv.Value.Edges) {
+                if (edge.ClippedEnds == null) continue;
+
+                Vector2f v1 = edge.ClippedEnds[LR.LEFT];
+                Vector2f v2 = edge.ClippedEnds[LR.RIGHT];
+
+                if (!EndsInBound(v1, v2, lowerBound, upperBound)) continue;
+
+                Vector2f end1 = new Vector2f(0,0);
+                Vector2f end2 = new Vector2f(0, 0);
+
+                foreach (Tuple<Vector2f, Vector2f> tup in cornerPositionList) {
+                    Vector2f diffLeft = tup.Item1 - v1;
+                    Vector2f diffRight = tup.Item1 - v2;
+                    if (diffLeft.magnitude < 0.05f)
+                        end1 = tup.Item2;
+                    if (diffRight.magnitude < 0.05f)
+                        end2 = tup.Item2;
+                }
+
+                Debug.Log("v1=" + v1 + " v2=" + v2 + " -> " + end1 + " " + end2);
+                BuildWall(end1, end2, zoneX, zoneY);
+                //BuildWall(cornerMap[v1], cornerMap[v2], zoneX, zoneY);
+                c++;
+            }
+            Debug.Log("c ==== " + c + " at " + kv.Key.x + "," + kv.Key.y);
+        }
 
         foreach (Edge edge in edges) {
             // if the edge doesn't have clippedEnds, if was not within the bounds, dont draw it
             if (edge.ClippedEnds == null) continue;
-            if (!EdgeInBound(edge, lowerBound, upperBound)) continue;
+            //if (!EdgeInBound(edge, lowerBound, upperBound)) continue;
 
-            Debug.Log(edge.ClippedEnds[LR.LEFT] + " " +  edge.ClippedEnds[LR.RIGHT]);
+            //Debug.Log(edge.ClippedEnds[LR.LEFT] + " " +  edge.ClippedEnds[LR.RIGHT]);
 
             ApplyStreet(edge.ClippedEnds[LR.LEFT], edge.ClippedEnds[LR.RIGHT], zoneX, zoneY);
             //InstantiateWall(edge.ClippedEnds[LR.LEFT], edge.ClippedEnds[LR.RIGHT], zoneX, zoneY);
         }
+
 
     }
 
@@ -210,7 +388,7 @@ public class WorldManager : MonoBehaviour {
         }
     }
 
-    private void InstantiateStreet(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
+    /*private void InstantiateStreet(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
         float x0 = (float)p0.x;
         float y0 = (float)p0.y;
         float x1 = (float)p1.x;
@@ -230,8 +408,8 @@ public class WorldManager : MonoBehaviour {
         road.transform.localScale = new Vector3(vec.magnitude, 1, streetWidth);
 
         Vector2 zone = DetermineZone(zoneX, zoneY, x, y);
-        zoneObjects[(int)zone.x + halfStorageDim, (int)zone.y + halfStorageDim].AddLast(road);
-    }
+        zoneStreetObjects[(int)zone.x + halfStorageDim, (int)zone.y + halfStorageDim].AddLast(road);
+    }*/
 
     private void ApplyStreet(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
         float x0 = (float)p0.x;
@@ -253,14 +431,46 @@ public class WorldManager : MonoBehaviour {
         trans.rotation = Quaternion.AngleAxis(angle, Vector3.up);
         trans.localScale = new Vector3(vec.magnitude, 1, streetWidth);
 
-        /*GameObject road = Instantiate(
-                    cube,
-                    new Vector3(x, 0, y),
-                    Quaternion.AngleAxis(angle, Vector3.up));
-        road.transform.localScale = new Vector3(vec.magnitude, 1, streetWidth);*/
-
         Vector2 zone = DetermineZone(zoneX, zoneY, x, y);
-        zoneObjects[(int)zone.x + halfStorageDim, (int)zone.y + halfStorageDim].AddLast(street);
+        zoneStreetObjects[(int)zone.x + halfStorageDim, (int)zone.y + halfStorageDim].AddLast(street);
+    }
+
+    //Builds wall segment
+    private void BuildWall(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
+        //Debug.Log("p0=" + p0 + " p1=" + p1);
+        float x0 = (float)p0.x;
+        float y0 = (float)p0.y;
+        float x1 = (float)p1.x;
+        float y1 = (float)p1.y;
+
+        float angle = Mathf.Atan2(x1 - x0, y1 - y0) * Mathf.Rad2Deg + 90;
+
+        Vector2f diff = p1 - p0;
+        float magnitude = diff.magnitude;
+
+        int quant = (int)(magnitude / 2);
+        float width = magnitude / quant;
+        //Debug.Log("Width=" + width + " mag=" + magnitude);
+        
+        //base case for very short walls
+        if (quant == 0) {
+            quant = 1;
+            width = magnitude;
+        }
+
+        for (int i = 0; i < quant; i++) {
+            GameObject wallSeg = wallQueue.Dequeue();
+            Transform trans = wallSeg.GetComponent<Transform>();
+
+            trans.position = new Vector3(
+                        p0.x + diff.x * ((i + 0.5f) * width / magnitude),
+                        wallHeight / 2,
+                        p0.y + diff.y * ((i + 0.5f) * width / magnitude));
+            trans.rotation = Quaternion.AngleAxis(angle, Vector3.up);
+            trans.localScale = new Vector3(width, wallHeight, 0.5f);
+        }
+
+        Debug.Log("segments made=" + quant);
     }
 
     private void InstantiateWall(Vector2f p0, Vector2f p1, int zoneX, int zoneY) {
@@ -300,26 +510,26 @@ public class WorldManager : MonoBehaviour {
     }
 
     private void DestroyZone(int zoneX, int zoneY) {
-        LinkedList<GameObject> list = zoneObjects[zoneX + halfStorageDim, zoneY + halfStorageDim];
+        LinkedList<GameObject> streetList = zoneObjects[zoneX + halfStorageDim, zoneY + halfStorageDim];
 
-        foreach (GameObject obj in list) {
+        foreach (GameObject obj in streetList) {
             Destroy(obj);
         }
 
-        list.Clear();
+        streetList.Clear();
         isInstantiated[zoneX + halfStorageDim, zoneY + halfStorageDim] = false;
     }
 
     private void RecycleZone(int zoneX, int zoneY) {
-        LinkedList<GameObject> list = zoneObjects[zoneX + halfStorageDim, zoneY + halfStorageDim];
+        LinkedList<GameObject> streetList = zoneStreetObjects[zoneX + halfStorageDim, zoneY + halfStorageDim];
 
-        foreach (GameObject obj in list) {
+        foreach (GameObject obj in streetList) {
             //streets only:
             streetQueue.Enqueue(obj);
             //Destroy(obj);
         }
 
-        list.Clear();
+        streetList.Clear();
         isInstantiated[zoneX + halfStorageDim, zoneY + halfStorageDim] = false;
     }
 
@@ -331,6 +541,25 @@ public class WorldManager : MonoBehaviour {
         float leftY = edge.ClippedEnds[LR.LEFT].y;
         float rightX = edge.ClippedEnds[LR.RIGHT].x;
         float rightY = edge.ClippedEnds[LR.RIGHT].y;
+
+        return !(leftX < lower.x || leftX > upper.x ||
+            leftY < lower.y || leftY > upper.y ||
+            rightX < lower.x || rightX > upper.x ||
+            rightY < lower.y || rightY > upper.y);
+    }
+
+    private bool SiteInBound(Site site, Vector2f lower, Vector2f upper) {
+        Vector2f coord = site.Coord;
+
+        return !(coord.x < lower.x || coord.x > upper.x ||
+            coord.y < lower.y || coord.y > upper.y);
+    }
+
+    private bool EndsInBound(Vector2f v1, Vector2f v2, Vector2f lower, Vector2f upper) {
+        float leftX = v1.x;
+        float leftY = v1.y;
+        float rightX = v2.x;
+        float rightY = v2.y;
 
         return !(leftX < lower.x || leftX > upper.x ||
             leftY < lower.y || leftY > upper.y ||
